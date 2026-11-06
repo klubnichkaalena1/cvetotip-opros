@@ -9,6 +9,12 @@
       content="Бесплатный опрос: определите свой цветотип по системе четырёх сезонов."
     />
     <title>Цветотип — опрос «4 сезона»</title>
+    <script>
+      try {
+        var t = localStorage.getItem('theme')
+        if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark')
+      } catch (_) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

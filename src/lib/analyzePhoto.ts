@@ -1,7 +1,9 @@
-import type { SeasonId } from '../types'
+import { resolveSubtypeForSeason } from '../data/subtypes'
+import type { SeasonId, SubtypeId } from '../types'
 
 export type PhotoAnalysisResult = {
   season: SeasonId
+  subtype: SubtypeId
   confidence: string
   note: string
 }
@@ -23,6 +25,7 @@ export async function analyzePhoto(imageDataUrl: string): Promise<PhotoAnalysisR
   const body = (await res.json().catch(() => ({}))) as {
     message?: string
     season?: SeasonId
+    subtype?: SubtypeId
     confidence?: string
     note?: string
   }
@@ -40,8 +43,11 @@ export async function analyzePhoto(imageDataUrl: string): Promise<PhotoAnalysisR
     throw new Error('Сервер не вернул цветотип.')
   }
 
+  const subtype = resolveSubtypeForSeason(body.season, body.subtype)
+
   return {
     season: body.season,
+    subtype,
     confidence: body.confidence ?? 'medium',
     note: body.note ?? '',
   }

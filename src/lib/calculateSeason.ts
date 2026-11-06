@@ -50,7 +50,7 @@ export function calculateSeason(
   return tied[0]
 }
 
-function scoreWarmCool(
+export function scoreWarmCool(
   answers: Record<string, string>,
 ): 'warm' | 'cool' | 'neutral' {
   let warm = 0

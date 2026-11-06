@@ -1,4 +1,4 @@
-import { PreviewPhoto, SamplePhotos } from './SamplePhotos'
+import { PreviewPhoto } from './SamplePhotos'
 
 type Props = {
   photo: string
@@ -14,15 +14,7 @@ export function OptionVisual({ photo, placeholderColor, label }: Props) {
         placeholderColor={placeholderColor}
         altHint={label}
       />
-      <div className="option-body">
-        <span className="option-label">{label}</span>
-        <span className="samples-caption">Примеры оттенков</span>
-        <SamplePhotos
-          photo={photo}
-          placeholderColor={placeholderColor}
-          altHint={label}
-        />
-      </div>
+      <span className="option-label">{label}</span>
     </div>
   )
 }

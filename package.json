@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -n web,api -c cyan,magenta \"vite\" \"node server/index.mjs\"",
+    "dev": "node scripts/kill-dev-ports.mjs && concurrently -k -n web,api -c cyan,magenta \"vite\" \"node server/index.mjs\"",
+    "dev:stop": "node scripts/kill-dev-ports.mjs",
     "dev:web": "vite",
     "dev:api": "node server/index.mjs",
     "build": "tsc -b && vite build",

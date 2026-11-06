@@ -1,5 +1,19 @@
 export type SeasonId = 'spring' | 'summer' | 'autumn' | 'winter'
 
+export type SubtypeId =
+  | 'spring-light'
+  | 'spring-warm'
+  | 'spring-bright'
+  | 'summer-light'
+  | 'summer-soft'
+  | 'summer-cool'
+  | 'autumn-soft'
+  | 'autumn-warm'
+  | 'autumn-deep'
+  | 'winter-deep'
+  | 'winter-cool'
+  | 'winter-bright'
+
 export type SeasonScores = Record<SeasonId, number>
 
 export type QuizOption = {
@@ -42,4 +56,13 @@ export type SeasonInfo = {
   palette: string[]
   theme: SeasonTheme
   checklist: string[]
+  /** Ориентиры для вдохновения, не официальная классификация */
+  examples: string[]
+}
+
+export type SubtypeInfo = {
+  id: SubtypeId
+  seasonId: SeasonId
+  name: string
+  blurb: string
 }

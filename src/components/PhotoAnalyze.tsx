@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import { analyzePhoto } from '../lib/analyzePhoto'
-import type { SeasonId } from '../types'
+import type { SeasonId, SubtypeId } from '../types'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const ACCEPT = 'image/jpeg,image/png,image/webp'
 
 type Props = {
-  onResult: (season: SeasonId, note: string) => void
+  onResult: (season: SeasonId, subtype: SubtypeId, note: string) => void
   onBack: () => void
 }
 
@@ -57,7 +57,7 @@ export function PhotoAnalyze({ onResult, onBack }: Props) {
     setError(null)
     try {
       const result = await analyzePhoto(preview)
-      onResult(result.season, result.note)
+      onResult(result.season, result.subtype, result.note)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Что-то пошло не так.')
     } finally {

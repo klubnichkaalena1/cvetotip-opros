@@ -1,11 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ColorSwatches } from './components/ColorSwatches'
 import { OptionVisual } from './components/OptionVisual'
+import { FaqSection } from './components/FaqSection'
 import { PhotoAnalyze } from './components/PhotoAnalyze'
+import { ThemeToggle } from './components/ThemeToggle'
 import { questions } from './data/questions'
 import { seasonThemeStyle, seasons } from './data/seasons'
+import { subtypes } from './data/subtypes'
 import { calculateSeason } from './lib/calculateSeason'
-import type { SeasonId } from './types'
+import { calculateSubtype } from './lib/calculateSubtype'
+import { applyTheme, readStoredTheme, type ColorTheme } from './lib/theme'
+import type { SeasonId, SubtypeId } from './types'
 import './App.css'
 
 type Screen = 'welcome' | 'quiz' | 'photo' | 'result'
@@ -16,7 +21,13 @@ function App() {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({})
   const [photoSeasonId, setPhotoSeasonId] = useState<SeasonId | null>(null)
+  const [photoSubtypeId, setPhotoSubtypeId] = useState<SubtypeId | null>(null)
   const [photoNote, setPhotoNote] = useState<string | null>(null)
+  const [colorTheme, setColorTheme] = useState<ColorTheme>(() => readStoredTheme())
+
+  useEffect(() => {
+    applyTheme(colorTheme)
+  }, [colorTheme])
 
   const question = questions[step]
   const progress = screen === 'quiz' ? ((step + 1) / questions.length) * 100 : 0
@@ -29,6 +40,14 @@ function App() {
 
   const result = resultId ? seasons[resultId] : null
 
+  const subtypeId = useMemo((): SubtypeId | null => {
+    if (screen !== 'result' || !resultId) return null
+    if (photoSubtypeId && photoSeasonId === resultId) return photoSubtypeId
+    return calculateSubtype(resultId, answers)
+  }, [screen, resultId, answers, photoSeasonId, photoSubtypeId])
+
+  const subtype = subtypeId ? subtypes[subtypeId] : null
+
   const appClassName = [
     'app',
     screen === 'result' && resultId ? `theme-${resultId}` : '',
@@ -36,15 +55,21 @@ function App() {
     .filter(Boolean)
     .join(' ')
 
-  const appStyle =
-    screen === 'result' && resultId
-      ? (seasonThemeStyle(resultId) as React.CSSProperties)
-      : undefined
+  const appStyle = useMemo((): React.CSSProperties | undefined => {
+    if (screen !== 'result' || !resultId) return undefined
+    if (colorTheme === 'light') {
+      return seasonThemeStyle(resultId) as React.CSSProperties
+    }
+    return {
+      '--season-accent': seasons[resultId].accent,
+    } as React.CSSProperties
+  }, [screen, resultId, colorTheme])
 
   function startQuiz() {
     setAnswers({})
     setCheckedItems({})
     setPhotoSeasonId(null)
+    setPhotoSubtypeId(null)
     setPhotoNote(null)
     setStep(0)
     setScreen('quiz')
@@ -54,13 +79,15 @@ function App() {
     setAnswers({})
     setCheckedItems({})
     setPhotoSeasonId(null)
+    setPhotoSubtypeId(null)
     setPhotoNote(null)
     setStep(0)
     setScreen('photo')
   }
 
-  function finishPhoto(seasonId: SeasonId, note: string) {
+  function finishPhoto(seasonId: SeasonId, subtype: SubtypeId, note: string) {
     setPhotoSeasonId(seasonId)
+    setPhotoSubtypeId(subtype)
     setPhotoNote(note || null)
     setCheckedItems({})
     setScreen('result')
@@ -89,6 +116,7 @@ function App() {
     setAnswers({})
     setCheckedItems({})
     setPhotoSeasonId(null)
+    setPhotoSubtypeId(null)
     setPhotoNote(null)
     setStep(0)
     setScreen('welcome')
@@ -103,11 +131,14 @@ function App() {
     <div className={appClassName} style={appStyle}>
       <header className="header">
         <span className="logo">Цветотип</span>
-        {screen === 'quiz' && (
-          <span className="step-label">
-            Вопрос {step + 1} из {questions.length}
-          </span>
-        )}
+        <div className="header-end">
+          {screen === 'quiz' && (
+            <span className="step-label">
+              Вопрос {step + 1} из {questions.length}
+            </span>
+          )}
+          <ThemeToggle theme={colorTheme} onChange={setColorTheme} />
+        </div>
       </header>
 
       {screen === 'quiz' && (
@@ -162,6 +193,8 @@ function App() {
               </article>
             </div>
 
+            <FaqSection />
+
             <p className="disclaimer">
               Результат ориентировочный и не заменяет очный разбор у
               специалиста.
@@ -205,12 +238,21 @@ function App() {
         )}
 
         {screen === 'result' && result && resultId && (
-          <section className="panel result">
+          <section
+            key={resultId}
+            className="panel result result--enter"
+          >
             <p className="result-label">Ваш цветотип</p>
             {photoSeasonId && (
               <p className="result-source">Определено по фото с помощью нейросети</p>
             )}
             <h1 className="result-title">{result.name}</h1>
+            {subtype && (
+              <>
+                <p className="subtype-name">{subtype.name}</p>
+                <p className="subtype-blurb">{subtype.blurb}</p>
+              </>
+            )}
             <p className="tagline">{result.tagline}</p>
             {photoNote && (
               <p className="photo-result-note">{photoNote}</p>
@@ -223,6 +265,19 @@ function App() {
                 size="lg"
                 label="Ваша палитра"
               />
+            </div>
+
+            <div className="result-block examples-block">
+              <h3>Часто относят к этому типу</h3>
+              <p className="examples-hint">
+                Ориентир для вдохновения — не официальная классификация
+                знаменитостей.
+              </p>
+              <ul className="examples-list">
+                {result.examples.map((name) => (
+                  <li key={name}>{name}</li>
+                ))}
+              </ul>
             </div>
 
             <div className="result-block">

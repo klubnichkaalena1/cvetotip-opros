@@ -8,7 +8,32 @@ const PORT = Number(process.env.PORT) || 3001
 const isProd = process.env.NODE_ENV === 'production'
 
 const VALID_SEASONS = new Set(['spring', 'summer', 'autumn', 'winter'])
+
+const SUBTYPES_BY_SEASON = {
+  spring: ['spring-light', 'spring-warm', 'spring-bright'],
+  summer: ['summer-light', 'summer-soft', 'summer-cool'],
+  autumn: ['autumn-soft', 'autumn-warm', 'autumn-deep'],
+  winter: ['winter-deep', 'winter-cool', 'winter-bright'],
+}
+
+/** Если модель вернула неверный subtype — типичный, не «мягкий» по умолчанию */
+const DEFAULT_SUBTYPE_BY_SEASON = {
+  spring: 'spring-warm',
+  summer: 'summer-cool',
+  autumn: 'autumn-warm',
+  winter: 'winter-cool',
+}
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+if (
+  !isProd &&
+  process.env.OPENROUTER_INSECURE_TLS?.trim() === '1'
+) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+  console.warn(
+    '[api] OPENROUTER_INSECURE_TLS=1 — ослаблена проверка HTTPS (только локальная отладка)',
+  )
+}
 
 const app = express()
 app.use(express.json({ limit: '8mb' }))
@@ -28,11 +53,16 @@ function parseDataUrl(dataUrl) {
   return { mime, dataUrl: `data:${mime};base64,${base64}` }
 }
 
-const SYSTEM_PROMPT = `You are a seasonal color analysis assistant (4-season system: spring, summer, autumn, winter).
-Analyze the face in the photo: skin undertone, hair, eyes, overall contrast.
+const SYSTEM_PROMPT = `You are a seasonal color analysis assistant (12-season refinement on 4 base seasons).
+Analyze the face: skin undertone, hair, eyes, overall contrast.
 Return ONLY one JSON object, no markdown:
-{"season":"spring"|"summer"|"autumn"|"winter","confidence":"high"|"medium"|"low","note":"1-2 short sentences in Russian for the user"}
-If the photo is unusable (no face, heavy filters, full makeup), still pick the best guess but set confidence to low and explain in note.`
+{"season":"spring"|"summer"|"autumn"|"winter","subtype":"<id>","confidence":"high"|"medium"|"low","note":"1-2 short sentences in Russian"}
+subtype must match season:
+spring: spring-light | spring-warm | spring-bright
+summer: summer-light | summer-soft | summer-cool (summer is cool-toned; there is no warm summer)
+autumn: autumn-soft | autumn-warm | autumn-deep
+winter: winter-deep | winter-cool | winter-bright
+If the photo is unusable, still pick best guess but set confidence to low and explain in note.`
 
 app.post('/api/analyze-photo', async (req, res) => {
   const apiKey = process.env.OPENROUTER_API_KEY?.trim()
@@ -61,7 +91,7 @@ app.post('/api/analyze-photo', async (req, res) => {
   }
 
   const model =
-    process.env.OPENROUTER_MODEL?.trim() || 'google/gemini-2.0-flash-001'
+    process.env.OPENROUTER_MODEL?.trim() || 'google/gemini-2.5-flash'
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -130,15 +160,36 @@ app.post('/api/analyze-photo', async (req, res) => {
       return
     }
 
+    const allowedSubtypes = SUBTYPES_BY_SEASON[season] ?? []
+    let subtype = String(data.subtype ?? '').toLowerCase()
+    if (!allowedSubtypes.includes(subtype)) {
+      subtype = DEFAULT_SUBTYPE_BY_SEASON[season] ?? allowedSubtypes[0] ?? ''
+    }
+
     res.json({
       season,
+      subtype,
       confidence: data.confidence ?? 'medium',
       note: typeof data.note === 'string' ? data.note : '',
     })
-  } catch {
+  } catch (err) {
+    const code = err?.cause?.code || err?.code || ''
+    console.error('[api] OpenRouter:', code || err?.message || err)
+
+    let message =
+      'Не удалось связаться с OpenRouter. Проверьте интернет и попробуйте позже.'
+
+    if (
+      code === 'SELF_SIGNED_CERT_IN_CHAIN' ||
+      code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+    ) {
+      message =
+        'Связь с OpenRouter блокирует антivirus или VPN (ошибка сертификата). Добавьте в .env строку OPENROUTER_INSECURE_TLS=1, сохраните файл и перезапустите npm run dev. Используйте только на своём компьютере.'
+    }
+
     res.status(502).json({
       error: 'network',
-      message: 'Не удалось связаться с OpenRouter. Проверьте интернет и попробуйте позже.',
+      message,
     })
   }
 })
@@ -151,10 +202,26 @@ if (isProd) {
   })
 }
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(
     isProd
       ? `Сайт и API: http://localhost:${PORT}`
       : `API: http://localhost:${PORT} (для разработки подключите Vite)`,
   )
 })
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `\nПорт ${PORT} уже занят другим процессом.`,
+      `\nЗакройте лишние терминалы или выполните: npm run dev:stop`,
+      `\nЗатем снова: npm run dev\n`,
+    )
+    process.exit(1)
+  }
+  console.error(err)
+  process.exit(1)
+})
+
+// concurrently на Windows иногда закрывает stdin — без этого процесс может сразу завершиться
+process.stdin.resume()
